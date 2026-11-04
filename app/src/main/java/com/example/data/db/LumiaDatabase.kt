@@ -26,7 +26,7 @@ abstract class LumiaDatabase : RoomDatabase() {
                     context.applicationContext,
                     LumiaDatabase::class.java,
                     "lumia_launcher.db"
-                ).fallbackToDestructiveMigration().build()
+                ).fallbackToDestructiveMigration(true).build()
                 INSTANCE = instance
                 instance
             }
