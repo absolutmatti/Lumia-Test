@@ -59,3 +59,25 @@ interface HiddenAppDao {
     @Query("DELETE FROM hidden_app")
     suspend fun clearAll()
 }
+
+@Dao
+interface CustomAppImageDao {
+    @Query("SELECT * FROM custom_app_image")
+    fun getAllCustomImages(): Flow<List<com.example.data.model.CustomAppImage>>
+
+    @Query("SELECT * FROM custom_app_image")
+    suspend fun getAllCustomImagesList(): List<com.example.data.model.CustomAppImage>
+
+    @Query("SELECT * FROM custom_app_image WHERE packageName = :packageName LIMIT 1")
+    suspend fun getByPackage(packageName: String): com.example.data.model.CustomAppImage?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(customAppImage: com.example.data.model.CustomAppImage)
+
+    @Query("DELETE FROM custom_app_image WHERE packageName = :packageName")
+    suspend fun deleteByPackage(packageName: String)
+
+    @Query("DELETE FROM custom_app_image")
+    suspend fun clearAll()
+}
+

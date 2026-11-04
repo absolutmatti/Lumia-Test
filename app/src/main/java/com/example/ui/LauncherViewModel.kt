@@ -23,16 +23,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 sealed interface NavigationEvent {
@@ -47,10 +43,12 @@ data class LauncherUiState(
     val networkStatus: NetworkStatus = NetworkStatus.DISCONNECTED,
     val timeDateState: TimeDateState = TimeDateState(formattedTime = "--:--", formattedDate = ""),
     val customWallpaperFile: File? = null,
+    val wallpaperVersion: Long = System.currentTimeMillis(),
     val contextMenuTarget: AppItem? = null,
     val isContextMenuTargetFavorite: Boolean = false,
     val isSettingsOpen: Boolean = false,
     val isCustomPickerOpen: Boolean = false,
+    val pendingCustomImagePackage: String? = null,
     val deviceImages: List<LocalMediaImage> = emptyList(),
     val isLoadingDeviceImages: Boolean = false,
     val toastMessage: String? = null,
@@ -190,7 +188,45 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun openAppInfo(context: Context, packageName: String) {
+    fun startCustomAppImageSelection(packageName: String) {
+        _uiState.update {
+            it.copy(
+                contextMenuTarget = null,
+                pendingCustomImagePackage = packageName
+            )
+        }
+    }
+
+    fun resetCustomAppImage(packageName: String) {
+        viewModelScope.launch {
+            appRepository.resetCustomAppImage(packageName)
+            _uiState.update {
+                it.copy(
+                    contextMenuTarget = null,
+                    toastMessage = getApplication<Application>().getString(R.string.toast_custom_image_reset)
+                )
+            }
+        }
+    }
+
+    fun setCustomAppImageFromUri(packageName: String, uri: Uri) {
+        viewModelScope.launch {
+            val success = appRepository.saveCustomAppImage(packageName, uri)
+            _uiState.update {
+                it.copy(
+                    pendingCustomImagePackage = null,
+                    isCustomPickerOpen = false,
+                    toastMessage = if (success) {
+                        getApplication<Application>().getString(R.string.toast_custom_image_saved)
+                    } else {
+                        getApplication<Application>().getString(R.string.toast_cannot_launch)
+                    }
+                )
+            }
+        }
+    }
+
+    fun openAppInfo(context: Context, packageName: String): Boolean {
         closeContextMenu()
         val success = appRepository.openAppInfo(context, packageName)
         if (!success) {
@@ -198,11 +234,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 it.copy(toastMessage = context.getString(R.string.toast_setting_unavailable))
             }
         }
+        return success
     }
 
-    fun uninstallApp(context: Context, packageName: String) {
+    fun uninstallApp(context: Context, packageName: String): Boolean {
         closeContextMenu()
-        appRepository.uninstallApp(context, packageName)
+        return appRepository.uninstallApp(context, packageName)
     }
 
     fun openSettings() {
@@ -275,7 +312,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun closeCustomWallpaperPicker() {
-        _uiState.update { it.copy(isCustomPickerOpen = false) }
+        _uiState.update {
+            it.copy(
+                isCustomPickerOpen = false,
+                pendingCustomImagePackage = null
+            )
+        }
     }
 
     fun setCustomWallpaperFromUri(uri: Uri) {
@@ -284,10 +326,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             if (saved) {
                 settingsRepository.setBackgroundMode(BackgroundPreference.CUSTOM)
                 val customFile = wallpaperManager.getCustomWallpaperFile()
+                val newVersion = System.currentTimeMillis()
                 _uiState.update {
                     it.copy(
                         customWallpaperFile = customFile,
+                        wallpaperVersion = newVersion,
                         isCustomPickerOpen = false,
+                        pendingCustomImagePackage = null,
                         toastMessage = getApplication<Application>().getString(R.string.toast_wallpaper_saved)
                     )
                 }
@@ -308,6 +353,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             _uiState.update {
                 it.copy(
                     customWallpaperFile = null,
+                    wallpaperVersion = System.currentTimeMillis(),
                     toastMessage = getApplication<Application>().getString(R.string.toast_wallpaper_reset)
                 )
             }
@@ -355,15 +401,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun onHomePressed() {
         // Closes all overlays
-        val wasOverlayOpen = _uiState.value.isSettingsOpen ||
-                _uiState.value.contextMenuTarget != null ||
-                _uiState.value.isCustomPickerOpen
-
         _uiState.update {
             it.copy(
                 isSettingsOpen = false,
                 contextMenuTarget = null,
                 isCustomPickerOpen = false,
+                pendingCustomImagePackage = null,
                 showResetFavoritesDialog = false
             )
         }
@@ -380,7 +423,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return true
         }
         if (state.isCustomPickerOpen) {
-            _uiState.update { it.copy(isCustomPickerOpen = false) }
+            _uiState.update { it.copy(isCustomPickerOpen = false, pendingCustomImagePackage = null) }
             return true
         }
         if (state.isSettingsOpen) {
@@ -389,6 +432,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
         if (state.contextMenuTarget != null) {
             _uiState.update { it.copy(contextMenuTarget = null) }
+            return true
+        }
+        if (state.pendingCustomImagePackage != null) {
+            _uiState.update { it.copy(pendingCustomImagePackage = null) }
             return true
         }
         return false

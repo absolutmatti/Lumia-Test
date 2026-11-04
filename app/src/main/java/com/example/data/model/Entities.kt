@@ -13,3 +13,11 @@ data class FavoriteApp(
 data class HiddenApp(
     @PrimaryKey val packageName: String
 )
+
+@Entity(tableName = "custom_app_image")
+data class CustomAppImage(
+    @PrimaryKey val packageName: String,
+    val isBanner: Boolean,
+    val timestamp: Long = System.currentTimeMillis()
+)
+

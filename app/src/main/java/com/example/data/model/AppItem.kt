@@ -13,5 +13,7 @@ data class AppItem(
     val hasBanner: Boolean,
     val isSystemApp: Boolean,
     val lastUpdateTime: Long,
-    val dynamicColors: CardColorResult
+    val dynamicColors: CardColorResult,
+    val hasCustomImage: Boolean = false
 )
+

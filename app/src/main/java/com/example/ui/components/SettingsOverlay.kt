@@ -54,6 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -91,6 +92,7 @@ enum class SettingsCategory {
     ABOUT
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SettingsOverlay(
     settings: LauncherSettings,
@@ -165,7 +167,11 @@ fun SettingsOverlay(
                     .width(260.dp)
                     .fillMaxHeight()
                     .background(Color.Black.copy(alpha = 0.25f))
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .focusGroup()
+                    .focusProperties {
+                        left = FocusRequester.Cancel
+                    },
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
@@ -313,6 +319,7 @@ fun SettingsOverlay(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun CategoryTabItem(
     title: String,
@@ -345,6 +352,16 @@ private fun CategoryTabItem(
             .onFocusChanged { focusState ->
                 if (focusState.isFocused) {
                     onFocus()
+                }
+            }
+            .focusProperties {
+                left = FocusRequester.Cancel
+            }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                    true // Consume left key completely
+                } else {
+                    false
                 }
             }
             .tvClickable(

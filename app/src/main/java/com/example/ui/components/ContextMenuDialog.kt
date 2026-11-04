@@ -26,7 +26,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -76,6 +78,8 @@ fun ContextMenuOverlay(
     onAppInfo: () -> Unit,
     onUninstall: () -> Unit,
     onHide: () -> Unit,
+    onChooseCustomImage: () -> Unit,
+    onResetCustomImage: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -202,6 +206,33 @@ fun ContextMenuOverlay(
                     }
                 }
             )
+
+            // 3. Custom App Icon / Banner
+            ContextMenuItem(
+                testTag = "menu_item_custom_image",
+                title = stringResource(R.string.menu_custom_image),
+                icon = Icons.Default.Image,
+                enabled = true,
+                onClick = {
+                    if (System.currentTimeMillis() - openTimeMs > 250L) {
+                        onChooseCustomImage()
+                    }
+                }
+            )
+
+            if (app.hasCustomImage) {
+                ContextMenuItem(
+                    testTag = "menu_item_reset_custom_image",
+                    title = stringResource(R.string.menu_reset_custom_image),
+                    icon = Icons.Default.Restore,
+                    enabled = true,
+                    onClick = {
+                        if (System.currentTimeMillis() - openTimeMs > 250L) {
+                            onResetCustomImage()
+                        }
+                    }
+                )
+            }
 
             // 3. Uninstall (only for non-system apps)
             if (!app.isSystemApp) {

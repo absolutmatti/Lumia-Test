@@ -5,7 +5,11 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,10 +20,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -33,18 +39,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.R
 import com.example.data.datastore.BackgroundPreference
 import com.example.data.model.AppItem
-import java.io.File
 import com.example.ui.components.AppCard
 import com.example.ui.components.ContextMenuOverlay
 import com.example.ui.components.CustomWallpaperPicker
@@ -54,7 +57,31 @@ import com.example.ui.components.StatusBar
 import com.example.ui.components.TopGradientOverlay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.io.File
+import kotlin.math.abs
 
+@OptIn(ExperimentalFoundationApi::class)
+class LumiaTvBringIntoViewSpec(
+    private val pivotFraction: Float = 0.45f
+) : BringIntoViewSpec {
+    override fun calculateScrollDistance(
+        offset: Float,
+        size: Float,
+        containerSize: Float
+    ): Float {
+        val targetLeadingEdge = pivotFraction * containerSize - (0.5f * size)
+        val distance = offset - targetLeadingEdge
+
+        // Deadband threshold: if within 12 pixels of the pivot line (subpixel rounding across 6 columns),
+        // do not scroll vertically. This completely eliminates vertical jitter when navigating horizontally across cards in the same row.
+        if (abs(distance) < 12f) {
+            return 0f
+        }
+        return distance
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LauncherScreen(
     viewModel: LauncherViewModel,
@@ -65,12 +92,17 @@ fun LauncherScreen(
     val coroutineScope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
 
-    // System file picker for wallpaper
+    // System file picker for wallpaper or app icon
     val docPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.setCustomWallpaperFromUri(uri)
+            val pendingPkg = uiState.pendingCustomImagePackage
+            if (pendingPkg != null) {
+                viewModel.setCustomAppImageFromUri(pendingPkg, uri)
+            } else {
+                viewModel.setCustomWallpaperFromUri(uri)
+            }
         }
     }
 
@@ -133,6 +165,7 @@ fun LauncherScreen(
         WallpaperBackground(
             backgroundMode = uiState.settings.backgroundMode,
             customWallpaperFile = uiState.customWallpaperFile,
+            wallpaperVersion = uiState.wallpaperVersion,
             gridState = gridState
         )
 
@@ -167,57 +200,61 @@ fun LauncherScreen(
                 .padding(top = 64.dp)
                 .clipToBounds()
         ) {
-            LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Fixed(6),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp),
-                contentPadding = PaddingValues(
-                    start = 40.dp,
-                    end = 40.dp,
-                    bottom = 72.dp
-                ),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .testTag("app_grid")
+            CompositionLocalProvider(
+                LocalBringIntoViewSpec provides remember { LumiaTvBringIntoViewSpec(0.45f) }
             ) {
-                // Item 0: Home-Header (Span 6 columns)
-                item(
-                    span = { GridItemSpan(6) },
-                    contentType = "home_header",
-                    key = "home_header"
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(6),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp),
+                    contentPadding = PaddingValues(
+                        start = 40.dp,
+                        end = 40.dp,
+                        bottom = 72.dp
+                    ),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("app_grid")
                 ) {
-                    val headerHeight = (screenHeight - 104.dp).coerceAtLeast(160.dp)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(headerHeight),
-                        contentAlignment = Alignment.BottomCenter
+                    // Item 0: Home-Header (Span 6 columns)
+                    item(
+                        span = { GridItemSpan(6) },
+                        contentType = "home_header",
+                        key = "home_header"
                     ) {
-                        FavoritesPanel(
-                            favorites = uiState.favoriteApps,
+                        val headerHeight = (screenHeight - 104.dp).coerceAtLeast(160.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(headerHeight),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            FavoritesPanel(
+                                favorites = uiState.favoriteApps,
+                                cardColorPreference = uiState.settings.cardColor,
+                                onAppClick = onAppClick,
+                                onAppLongClick = onFavoriteAppLongClick,
+                                firstItemFocusRequester = firstFavoriteFocusRequester,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+                        }
+                    }
+
+                    // Grid Apps (Remaining apps: not hidden and not favorites)
+                    items(
+                        items = uiState.gridApps,
+                        key = { it.packageName },
+                        contentType = { "app_card" }
+                    ) { app ->
+                        AppCard(
+                            app = app,
                             cardColorPreference = uiState.settings.cardColor,
-                            onAppClick = onAppClick,
-                            onAppLongClick = onFavoriteAppLongClick,
-                            firstItemFocusRequester = firstFavoriteFocusRequester,
-                            modifier = Modifier.padding(bottom = 16.dp)
+                            onCardClick = onAppClick,
+                            onCardLongClick = onGridAppLongClick,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                }
-
-                // Grid Apps (Remaining apps: not hidden and not favorites)
-                items(
-                    items = uiState.gridApps,
-                    key = { it.packageName },
-                    contentType = { "app_card" }
-                ) { app ->
-                    AppCard(
-                        app = app,
-                        cardColorPreference = uiState.settings.cardColor,
-                        onCardClick = onAppClick,
-                        onCardLongClick = onGridAppLongClick,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
         }
@@ -233,6 +270,17 @@ fun LauncherScreen(
                 onAppInfo = { viewModel.openAppInfo(context, targetApp.packageName) },
                 onUninstall = { viewModel.uninstallApp(context, targetApp.packageName) },
                 onHide = { viewModel.hideApp(targetApp.packageName) },
+                onChooseCustomImage = {
+                    viewModel.startCustomAppImageSelection(targetApp.packageName)
+                    try {
+                        docPickerLauncher.launch(arrayOf("image/*"))
+                    } catch (_: Exception) {
+                        viewModel.openCustomWallpaperPicker()
+                    }
+                },
+                onResetCustomImage = {
+                    viewModel.resetCustomAppImage(targetApp.packageName)
+                },
                 onDismiss = { viewModel.closeContextMenu() }
             )
         }
@@ -264,12 +312,19 @@ fun LauncherScreen(
             )
         }
 
-        // 6. In-App Custom Wallpaper MediaStore Picker
+        // 6. In-App MediaStore Picker (for Wallpaper or Custom App Image)
         if (uiState.isCustomPickerOpen) {
             CustomWallpaperPicker(
                 images = uiState.deviceImages,
                 isLoading = uiState.isLoadingDeviceImages,
-                onSelectImage = { uri -> viewModel.setCustomWallpaperFromUri(uri) },
+                onSelectImage = { uri ->
+                    val pendingPkg = uiState.pendingCustomImagePackage
+                    if (pendingPkg != null) {
+                        viewModel.setCustomAppImageFromUri(pendingPkg, uri)
+                    } else {
+                        viewModel.setCustomWallpaperFromUri(uri)
+                    }
+                },
                 onDismiss = { viewModel.closeCustomWallpaperPicker() }
             )
         }
@@ -280,6 +335,7 @@ fun LauncherScreen(
 private fun WallpaperBackground(
     backgroundMode: BackgroundPreference,
     customWallpaperFile: File?,
+    wallpaperVersion: Long,
     gridState: LazyGridState,
     modifier: Modifier = Modifier
 ) {
@@ -287,10 +343,12 @@ private fun WallpaperBackground(
     Box(modifier = modifier.fillMaxSize()) {
         if (backgroundMode == BackgroundPreference.CUSTOM && customWallpaperFile != null) {
             AsyncImage(
-                model = remember(customWallpaperFile, context) {
+                model = remember(customWallpaperFile, wallpaperVersion, context) {
                     ImageRequest.Builder(context)
                         .data(customWallpaperFile)
-                        .crossfade(false)
+                        .memoryCacheKey("custom_wallpaper_$wallpaperVersion")
+                        .diskCacheKey("custom_wallpaper_$wallpaperVersion")
+                        .crossfade(180)
                         .build()
                 },
                 contentDescription = null,

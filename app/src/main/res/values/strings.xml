@@ -61,6 +61,10 @@
     <string name="menu_app_info">App-Info</string>
     <string name="menu_uninstall">Deinstallieren</string>
     <string name="menu_hide">Ausblenden</string>
+    <string name="menu_custom_image">Eigenes Icon / Banner auswählen…</string>
+    <string name="menu_reset_custom_image">Eigenes Icon / Banner zurücksetzen</string>
+    <string name="toast_custom_image_saved">Eigenes Icon / Banner erfolgreich aktualisiert</string>
+    <string name="toast_custom_image_reset">Eigenes Icon / Banner wiederhergestellt</string>
     <string name="toast_hidden">Ausgeblendet. Wieder einblenden unter Einstellungen → Apps.</string>
     <string name="toast_cannot_launch">App kann nicht gestartet werden</string>
     <string name="toast_setting_unavailable">Einstellung nicht verfügbar</string>

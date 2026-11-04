@@ -61,6 +61,10 @@
     <string name="menu_app_info">App Info</string>
     <string name="menu_uninstall">Uninstall</string>
     <string name="menu_hide">Hide</string>
+    <string name="menu_custom_image">Choose custom icon / banner…</string>
+    <string name="menu_reset_custom_image">Reset custom icon / banner</string>
+    <string name="toast_custom_image_saved">Custom icon / banner updated successfully</string>
+    <string name="toast_custom_image_reset">Custom icon / banner restored to default</string>
     <string name="toast_hidden">Hidden. Unhide in Settings → Apps.</string>
     <string name="toast_cannot_launch">Cannot launch app</string>
     <string name="toast_setting_unavailable">Setting not available</string>
